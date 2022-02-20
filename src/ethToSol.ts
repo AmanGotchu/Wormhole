@@ -213,7 +213,7 @@ const ethToSolTransfer = async ({
   }
 };
 
-export const run = async ({ethPvKey, ethTokenAddr, solPubKey, solPvKey, solTokenAddr, attest }) => {
+export const run = async ({ethPvKey, ethTokenAddr, solPubKey, solPvKey, solRecipientAddr, solTokenAddr, attest }) => {
   const ethProvider = new providers.JsonRpcProvider(
     MAINNET_ETH_ENDPOINT
    );
@@ -243,7 +243,7 @@ export const run = async ({ethPvKey, ethTokenAddr, solPubKey, solPvKey, solToken
      tokenAddress: solTokenAddr,
      solanaPayerAddress: solPvKey,
      amount: 1000000, // GWEI Sending $2
-     recipientAddress: base58.decode(solTokenAddr)
+     recipientAddress: base58.decode(solRecipientAddr)
    });
    console.log("Transact response:", transactRes);
    return transactRes;

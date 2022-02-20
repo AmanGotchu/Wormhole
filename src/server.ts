@@ -10,8 +10,6 @@ import { run } from './ethToSol';
 
 const port = process.env.PORT || 4000
 
-import fs from 'fs';
-
 const app = express();
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -21,14 +19,14 @@ app.use(cors());
 
 app.post("/swap", async (req, res, next) => {
     const {
-        ethPvKey, ethTokenAddr, solPubKey, solPvKey, solTokenAddr, attest
+        ethPvKey, ethTokenAddr, solPubKey, solPvKey, solTokenAddr, solRecipientAddr, attest
     } = req.body;
 
     const {
         ethereumTransactionID,
         solanaTransactionID
     } = await run({
-        ethPvKey, ethTokenAddr, solPubKey, solPvKey, solTokenAddr, attest
+        ethPvKey, ethTokenAddr, solPubKey, solPvKey, solTokenAddr, solRecipientAddr, attest
     })
 
     // return the transaction IDs when the transaction completes
