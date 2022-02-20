@@ -1,16 +1,11 @@
 import {
-  approveEth,
   attestFromEth,
   CHAIN_ID_ETH,
   CHAIN_ID_SOLANA,
   createWrappedOnSolana,
   getEmitterAddressEth,
-  getForeignAssetSolana,
   getSignedVAAWithRetry,
-  hexToUint8Array,
-  nativeToHexString,
   parseSequenceFromLogEth,
-  postVaaSolana,
   postVaaSolanaWithRetry,
   redeemOnSolana,
   transferFromEth,
@@ -22,34 +17,22 @@ import {
   SOL_BRIDGE_ADDRESS,
   SOL_TOKEN_BRIDGE_ADDRESS,
   MAINNET_SOL_ENDPOINT,
-  ETH_USD_ADDRESS,
-  ETH_PUB_KEY,
-  ETH_PV_KEY,
   MAINNET_ETH_ENDPOINT,
-  SOL_USDC_PUB_KEY,
-  SOL_PV_KEY,
-  SOL_PUB_KEY,
-  // ERC20_ADDRESS,
-  // USDC_GOERLI_ADDRESS,
 } from "./utils";
-
-import blah from "./erc20.json";
 
 import {
   Connection,
-  Keypair,
   PublicKey,
   sendAndConfirmTransaction,
   Signer as SOLSigner,
 } from "@solana/web3.js";
-import { Contract, ethers, providers, Signer as ETHSigner, Transaction, Wallet } from "ethers";
+import { providers, Signer as ETHSigner, Wallet } from "ethers";
 
 import base58 from "bs58";
 
 import { NodeHttpTransport } from "@improbable-eng/grpc-web-node-http-transport";
 
 import { setDefaultWasm } from "@certusone/wormhole-sdk/lib/cjs/solana/wasm";
-import { parseUnits } from "ethers/lib/utils";
 // this fixes the unexpected token issue, the default wasm is intended for bundlers
 setDefaultWasm("node");
 
@@ -129,11 +112,6 @@ const ethToSolanaAttestation = async ({
     Buffer.from(vaaBytes)
   );
   console.log("Created Wrapped Transaction");
-
-  // Shitty documentation from Wormhole (Keeping for reference)
-  //   const signed = await wallet.signTransaction(transaction);
-  //   const txid = await connection.sendRawTransaction(signed.serialize());
-  //   await connection.confirmTransaction(txid);
 
   const res = await sendAndConfirmTransaction(connection, transaction, [
     solSigner,
@@ -228,53 +206,46 @@ const ethToSolTransfer = async ({
     transaction.serialize()
   );
   await connection.confirmTransaction(txid);
+
+  return {
+    ethereumTransactionID: receipt.transactionHash,
+    solanaTransactionID: txid
+  }
 };
 
-const getBalance = async (options) => {
-  const contract = new Contract(ETH_USD_ADDRESS, blah, options.provider);
-  const balance = await contract.balanceOf(options.address);
-  console.log("ERC20 Balance:", balance.toString());
-
-  const etherBalance = await options.provider.getBalance(options.address);
-  console.log("Ether Balance:", etherBalance.toString());
-};
-
-(async () => {
-  const solConnection = new Connection(MAINNET_SOL_ENDPOINT, "confirmed");
-
+export const run = async ({ethPvKey, ethTokenAddr, solPubKey, solPvKey, solTokenAddr, attest }) => {
   const ethProvider = new providers.JsonRpcProvider(
-   MAINNET_ETH_ENDPOINT
-  );
-  const ethSigner: ETHSigner = new Wallet(ETH_PV_KEY, ethProvider);
+    MAINNET_ETH_ENDPOINT
+   );
+   const ethSigner: ETHSigner = new Wallet(ethPvKey, ethProvider);
+ 
+   const solConnection = new Connection(MAINNET_SOL_ENDPOINT, "confirmed");
+   const solSigner = {
+     publicKey: new PublicKey(solPubKey),
+     secretKey: Buffer.from(base58.decode(solPvKey))
+   };
+   
+   if (attest) {
+     const attestRes = await ethToSolanaAttestation({
+      connection: solConnection,
+      ethSigner,
+      solSigner,
+      tokenAddress: ethTokenAddr,
+      solanaPayerAddress: solPubKey,
+    });
+    console.log("Attest response:", attestRes);
+   }
+ 
+   const transactRes = await ethToSolTransfer({
+     connection: solConnection,
+     ethSigner,
+     solSigner,
+     tokenAddress: solTokenAddr,
+     solanaPayerAddress: solPvKey,
+     amount: 1000000, // GWEI Sending $2
+     recipientAddress: base58.decode(solTokenAddr)
+   });
+   console.log("Transact response:", transactRes);
+   return transactRes;
+}
 
-  await getBalance({
-    address: ETH_PUB_KEY,
-    provider: ethProvider
-  })
-
-  const solSigner = {
-    publicKey: new PublicKey(SOL_PUB_KEY),
-    secretKey: Buffer.from(base58.decode(SOL_PV_KEY))
-  };
-
-  // Works!!
-  // const attestRes = await ethToSolanaAttestation({
-  //   connection: solConnection,
-  //   ethSigner,
-  //   solSigner,
-  //   tokenAddress: ETH_USD_ADDRESS,
-  //   solanaPayerAddress: solPubKey,
-  // });
-  // console.log("Attest response:", attestRes);
-  console.log(ETH_USD_ADDRESS);
-  const transactRes = await ethToSolTransfer({
-    connection: solConnection,
-    ethSigner,
-    solSigner,
-    tokenAddress: ETH_USD_ADDRESS,
-    solanaPayerAddress: SOL_PUB_KEY,
-    amount: 100, // GWEI Sending $20
-    recipientAddress: base58.decode(SOL_PUB_KEY)
-  });
-  console.log("Transact response:", transactRes);
-})();
