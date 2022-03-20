@@ -19,18 +19,18 @@
   "dependencies": {
     "@certusone/wormhole-sdk": "^0.2.0",
     "@improbable-eng/grpc-web-node-http-transport": "^0.15.0",
+    "@mapbox/node-pre-gyp": "^1.0.8",
+    "@solana/buffer-layout": "^4.0.0",
     "@solana/spl-token": "^0.2.0",
     "@solana/wallet-adapter-react": "^0.15.3",
     "@solana/web3.js": "^1.35.0",
-    "bs58": "^5.0.0",
-    "ethers": "^5.5.4",
-    "@mapbox/node-pre-gyp": "^1.0.8",
     "axios": "^0.23.0",
     "body-parser": "^1.19.0",
+    "bs58": "^5.0.0",
     "cors": "^2.8.5",
     "dotenv": "^10.0.0",
+    "ethers": "^5.5.4",
     "express": "^4.17.1",
     "request": "^2.88.2"
   }
 }
-

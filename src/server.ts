@@ -1,12 +1,8 @@
-import solanaWeb3 from '@solana/web3.js';
-import request from 'request';
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
-import axios from "axios";
-import path from 'path';
 
-import { run } from './ethToSol';
+import { ethToSol } from './ethToSol';
 
 const port = process.env.PORT || 4000
 
@@ -19,24 +15,39 @@ app.use(cors());
 
 app.post("/swap", async (req, res, next) => {
     const {
-        ethPvKey, ethTokenAddr, solPubKey, solPvKey, solTokenAddr, solRecipientAddr, attest
-    } = req.body;
+        amount, 
+        ETH_PV_KEY,
+        ETH_PUB_KEY,
+        ETH_ERC20_ADDRESS,
+        SOL_PV_KEY,
+        SOL_PUB_KEY,
+        SOL_SPL_TOKEN_ADDRESS
+    } = req.body.params;
+    console.log(req.body);
+
+    // const amount = 1;
+    // const ETH_PV_KEY = "";
+    // const ETH_PUB_KEY = "";
+    // const ETH_ERC20_ADDRESS = "";
+    // const SOL_PV_KEY = "";
+    // const SOL_PUB_KEY = "";
+    // const SOL_SPL_TOKEN_ADDRESS = "";
 
     const {
         ethereumTransactionID,
         solanaTransactionID
-    } = await run({
-        ethPvKey, ethTokenAddr, solPubKey, solPvKey, solTokenAddr, solRecipientAddr, attest
+    } = await ethToSol({
+        amount, 
+        ETH_PV_KEY,
+        ETH_PUB_KEY,
+        ETH_ERC20_ADDRESS,
+        SOL_PV_KEY,
+        SOL_PUB_KEY,
+        SOL_SPL_TOKEN_ADDRESS
     })
 
     // return the transaction IDs when the transaction completes
     res.status(200).send({ethereumTransactionID, solanaTransactionID});
-});
-
-app.get("/:publicKey", async (req, res, next) => {
-    //if we want to pull a history of previous transactions
-    // run();
-    console.log("Weird");
 });
 
 app.listen(port, () => {

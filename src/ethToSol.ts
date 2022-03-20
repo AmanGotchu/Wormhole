@@ -10,16 +10,8 @@ import {
   redeemOnSolana,
   transferFromEth,
 } from "@certusone/wormhole-sdk";
-import {
-  ETH_TOKEN_BRIDGE_ADDRESS,
-  ETH_BRIDGE_ADDRESS,
-  WORMHOLE_RPC_HOST,
-  SOL_BRIDGE_ADDRESS,
-  SOL_TOKEN_BRIDGE_ADDRESS,
-  MAINNET_SOL_ENDPOINT,
-  MAINNET_ETH_ENDPOINT,
-} from "./utils";
 
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import {
   Connection,
   PublicKey,
@@ -27,14 +19,10 @@ import {
   Signer as SOLSigner,
 } from "@solana/web3.js";
 import { providers, Signer as ETHSigner, Wallet } from "ethers";
-
 import base58 from "bs58";
-
 import { NodeHttpTransport } from "@improbable-eng/grpc-web-node-http-transport";
-
 import { setDefaultWasm } from "@certusone/wormhole-sdk/lib/cjs/solana/wasm";
-// this fixes the unexpected token issue, the default wasm is intended for bundlers
-setDefaultWasm("node");
+setDefaultWasm("node"); // this fixes the unexpected token issue, the default wasm is intended for bundlers
 
 type AttestParams = {
   connection: Connection; // Solana connection
@@ -54,6 +42,20 @@ type TransferParams = {
   recipientAddress: Uint8Array;
 };
 
+// ETH Constants
+const ETH_BRIDGE_ADDRESS = "0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B";
+const ETH_TOKEN_BRIDGE_ADDRESS = "0x3ee18B2214AFF97000D974cf647E7C347E8fa585";
+const MAINNET_ETH_ENDPOINT = "https://mainnet.infura.io/v3/2fdbd938f4b64e988733ddf0d3d84c82";
+
+// SOL Constants
+const SOL_BRIDGE_ADDRESS = "worm2ZoG2kUd4vFXhvjh93UUH596ayRfgQ2MgjNMTth";
+const SOL_TOKEN_BRIDGE_ADDRESS = "wormDTUJ6AWPNvk59vGQbDvGJmqbDTdgWgAqcLBCgUb";
+const MAINNET_SOL_ENDPOINT = "https://api.mainnet-beta.solana.com";
+
+// Wormhole Constants
+const WORMHOLE_RPC_HOST = "https://wormhole-v2-mainnet-api.certus.one"
+
+
 const ethToSolanaAttestation = async ({
   connection,
   ethSigner,
@@ -71,9 +73,11 @@ const ethToSolanaAttestation = async ({
   );
   console.log("Receipt:", receipt);
   console.log("Attested from ETH");
+
   // Get the sequence number and emitter address required to fetch the signedVAA of our message
   const sequence = parseSequenceFromLogEth(receipt, ETH_BRIDGE_ADDRESS);
   const emitterAddress = getEmitterAddressEth(ETH_TOKEN_BRIDGE_ADDRESS);
+
   // Fetch the signedVAA from the Wormhole Network (this may require retries while you wait for confirmation)
   const { vaaBytes } = await getSignedVAAWithRetry(
     [WORMHOLE_RPC_HOST],
@@ -112,6 +116,11 @@ const ethToSolanaAttestation = async ({
     Buffer.from(vaaBytes)
   );
   console.log("Created Wrapped Transaction");
+
+  // Shitty documentation from Wormhole (Keeping for reference)
+  //   const signed = await wallet.signTransaction(transaction);
+  //   const txid = await connection.sendRawTransaction(signed.serialize());
+  //   await connection.confirmTransaction(txid);
 
   const res = await sendAndConfirmTransaction(connection, transaction, [
     solSigner,
@@ -153,7 +162,7 @@ const ethToSolTransfer = async ({
     emitterAddress,
     sequence,
     {
-      transport: NodeHttpTransport(), //This should only be needed when running in node.
+      transport: NodeHttpTransport(), // This should only be needed when running in node.
     },
     1000, //retryTimeout
     1000 //Maximum retry attempts
@@ -173,16 +182,6 @@ const ethToSolTransfer = async ({
     5
   );
   console.log("Posted VAA WIth Retry")
-
-  // Finally, redeem on Solana
-  // const transaction = await redeemOnSolana(
-  //   connection,
-  //   SOL_BRIDGE_ADDRESS,
-  //   SOL_TOKEN_BRIDGE_ADDRESS,
-  //   solanaPayerAddress,
-  //   Buffer.from(vaaBytes)
-  // );
-  // console.log("Redeemed on Solana")
 
   // Shitty documentation from Wormhole (Keeping for reference)
     // const signed = await (transaction);
@@ -206,46 +205,93 @@ const ethToSolTransfer = async ({
     transaction.serialize()
   );
   await connection.confirmTransaction(txid);
+  console.log("Confirmed transactions:", txid, receipt.transactionHash);
 
   return {
-    ethereumTransactionID: receipt.transactionHash,
-    solanaTransactionID: txid
+    solTx: txid,
+    ethTx: receipt.transactionHash
   }
 };
 
-export const run = async ({ethPvKey, ethTokenAddr, solPubKey, solPvKey, solRecipientAddr, solTokenAddr, attest }) => {
-  const ethProvider = new providers.JsonRpcProvider(
-    MAINNET_ETH_ENDPOINT
-   );
-   const ethSigner: ETHSigner = new Wallet(ethPvKey, ethProvider);
- 
-   const solConnection = new Connection(MAINNET_SOL_ENDPOINT, "confirmed");
-   const solSigner = {
-     publicKey: new PublicKey(solPubKey),
-     secretKey: Buffer.from(base58.decode(solPvKey))
-   };
-   
-   if (attest) {
-     const attestRes = await ethToSolanaAttestation({
-      connection: solConnection,
-      ethSigner,
-      solSigner,
-      tokenAddress: ethTokenAddr,
-      solanaPayerAddress: solPubKey,
-    });
-    console.log("Attest response:", attestRes);
-   }
- 
-   const transactRes = await ethToSolTransfer({
-     connection: solConnection,
-     ethSigner,
-     solSigner,
-     tokenAddress: solTokenAddr,
-     solanaPayerAddress: solPvKey,
-     amount: 1000000, // GWEI Sending $2
-     recipientAddress: base58.decode(solRecipientAddr)
-   });
-   console.log("Transact response:", transactRes);
-   return transactRes;
+const findAssociatedTokenAddress = async(
+  walletAddress: PublicKey,
+  tokenMintAddress: PublicKey
+): Promise<PublicKey> => {
+  console.log("Finding associated token address");
+
+  const SPL_ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID: PublicKey = new PublicKey(
+    'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
+  );
+  return (await PublicKey.findProgramAddress(
+      [
+          walletAddress.toBuffer(),
+          TOKEN_PROGRAM_ID.toBuffer(),
+          tokenMintAddress.toBuffer(),
+      ],
+      SPL_ASSOCIATED_TOKEN_ACCOUNT_PROGRAM_ID
+  ))[0];
 }
 
+export const ethToSol = async ({
+  amount, 
+  ETH_PV_KEY,
+  ETH_PUB_KEY,
+  ETH_ERC20_ADDRESS,
+  SOL_PV_KEY,
+  SOL_PUB_KEY,
+  SOL_SPL_TOKEN_ADDRESS
+}) => {
+  // Ethereum Setup
+  const ethProvider = new providers.JsonRpcProvider(
+   MAINNET_ETH_ENDPOINT
+  );
+  const ethSigner: ETHSigner = new Wallet(ETH_PV_KEY, ethProvider);
+
+  // Solana Setup
+  const solConnection = new Connection(MAINNET_SOL_ENDPOINT, "confirmed");
+  const solSigner = {
+    publicKey: new PublicKey(SOL_PUB_KEY),
+    secretKey: Buffer.from(base58.decode(SOL_PV_KEY))
+  };
+  const SOL_USDC_PUB_KEY = await findAssociatedTokenAddress(new PublicKey(SOL_PUB_KEY), new PublicKey(SOL_SPL_TOKEN_ADDRESS)); // Derive using Solana key + spl token address
+
+  // Commenting out attestation since it's only required once per ethereum/solana account. Purely for demo purposes only.
+  // Uncomment when running for first time.
+
+  // const attestRes = await ethToSolanaAttestation({
+  //   connection: solConnection,
+  //   ethSigner,
+  //   solSigner,
+  //   tokenAddress: ETH_USD_ADDRESS,
+  //   solanaPayerAddress: SOL_PUB_KEY,
+  // });
+  // console.log("Attest response:", attestRes);
+
+  // Need to make sure that ethereum address has approved unlimited token transfers through wormhole
+  // Otherwise will get a ERC20 transfer allowance exceeded, even when balance is sufficient!
+  // Easy way to do this is doing a transfer through wormhole portal once: https://portalbridge.com/
+  // TODO(aman): Programatically create an approve transaction
+  const amntUSDMultiplier = 1000000; // Assuming amount is in USD and we're sending USDC (Really dumb here, change to disregard multiplier)
+  const transactRes = await ethToSolTransfer({
+    connection: solConnection,
+    ethSigner,
+    solSigner,
+    tokenAddress: ETH_ERC20_ADDRESS,
+    solanaPayerAddress: SOL_PUB_KEY,
+    amount: parseInt(amount) * amntUSDMultiplier,
+    recipientAddress: base58.decode(SOL_USDC_PUB_KEY.toBase58())
+  });
+
+  return {
+    ethereumTransactionID: transactRes.ethTx,
+    solanaTransactionID: transactRes.solTx
+  }
+}
+
+(async() => {
+  const SOL_PUB_KEY = "FENtiNeQTuWDUNquHyQMVq9BvsJ2RfhoKrVoPw1jP1ts";
+  const SOL_SPL_TOKEN_ADDRESS = "A9mUU4qviSctJVPJdBJWkb28deg915LYJKrzQ19ji3FM";
+
+  const SOL_USDC_PUB_KEY = await findAssociatedTokenAddress(new PublicKey(SOL_PUB_KEY), new PublicKey(SOL_SPL_TOKEN_ADDRESS)); // Derive using Solana key + spl token address
+  console.log(SOL_USDC_PUB_KEY.toBase58());
+})()
