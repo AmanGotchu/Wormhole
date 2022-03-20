@@ -287,11 +287,3 @@ export const ethToSol = async ({
     solanaTransactionID: transactRes.solTx
   }
 }
-
-(async() => {
-  const SOL_PUB_KEY = "FENtiNeQTuWDUNquHyQMVq9BvsJ2RfhoKrVoPw1jP1ts";
-  const SOL_SPL_TOKEN_ADDRESS = "A9mUU4qviSctJVPJdBJWkb28deg915LYJKrzQ19ji3FM";
-
-  const SOL_USDC_PUB_KEY = await findAssociatedTokenAddress(new PublicKey(SOL_PUB_KEY), new PublicKey(SOL_SPL_TOKEN_ADDRESS)); // Derive using Solana key + spl token address
-  console.log(SOL_USDC_PUB_KEY.toBase58());
-})()
